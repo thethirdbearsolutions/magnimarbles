@@ -31,26 +31,44 @@ export function inRect(px, pz, r) {
   return Math.abs(px - r.x) <= r.w / 2 && Math.abs(pz - r.z) <= r.d / 2;
 }
 
-/** Sphere (in the XZ plane, radius rad) against an axis-aligned box.
- *  Returns null or { nx, nz, depth } with the outward normal. */
+/** Sphere (in the XZ plane, radius rad) against a box, axis-aligned or
+ *  rotated by r.a radians about its center.
+ *  Returns null or { nx, nz, depth } with the outward normal in world space. */
 function circleVsRect(px, pz, rad, r) {
-  const cx = clamp(px, r.x - r.w / 2, r.x + r.w / 2);
-  const cz = clamp(pz, r.z - r.d / 2, r.z + r.d / 2);
-  let dx = px - cx, dz = pz - cz;
+  let lx = px - r.x, lz = pz - r.z;
+  const a = r.a || 0;
+  let ca = 1, sa = 0;
+  if (a) {
+    ca = Math.cos(a); sa = Math.sin(a);
+    // into the box's frame
+    const tx = lx * ca + lz * sa, tz = -lx * sa + lz * ca;
+    lx = tx; lz = tz;
+  }
+  const cx = clamp(lx, -r.w / 2, r.w / 2);
+  const cz = clamp(lz, -r.d / 2, r.d / 2);
+  let dx = lx - cx, dz = lz - cz;
   let d2 = dx * dx + dz * dz;
   if (d2 > rad * rad) return null;
+  let nx, nz, depth;
   if (d2 === 0) {
     // center is inside the box: push out through the nearest face
-    const left = px - (r.x - r.w / 2), right = (r.x + r.w / 2) - px;
-    const back = pz - (r.z - r.d / 2), front = (r.z + r.d / 2) - pz;
+    const left = lx + r.w / 2, right = r.w / 2 - lx;
+    const back = lz + r.d / 2, front = r.d / 2 - lz;
     const m = Math.min(left, right, back, front);
-    if (m === left) return { nx: -1, nz: 0, depth: left + rad };
-    if (m === right) return { nx: 1, nz: 0, depth: right + rad };
-    if (m === back) return { nx: 0, nz: -1, depth: back + rad };
-    return { nx: 0, nz: 1, depth: front + rad };
+    if (m === left) { nx = -1; nz = 0; depth = left + rad; }
+    else if (m === right) { nx = 1; nz = 0; depth = right + rad; }
+    else if (m === back) { nx = 0; nz = -1; depth = back + rad; }
+    else { nx = 0; nz = 1; depth = front + rad; }
+  } else {
+    const d = Math.sqrt(d2);
+    nx = dx / d; nz = dz / d; depth = rad - d;
   }
-  const d = Math.sqrt(d2);
-  return { nx: dx / d, nz: dz / d, depth: rad - d };
+  if (a) {
+    // back out of the box's frame
+    const wx = nx * ca - nz * sa, wz = nx * sa + nz * ca;
+    nx = wx; nz = wz;
+  }
+  return { nx, nz, depth };
 }
 
 export class Marble {
@@ -85,6 +103,8 @@ export class World {
       { x: W / 2 + t / 2, z: 0, w: t, d: D, h: 1, edge: true },
       ...(level.walls || []).map(w => ({ h: 1, ...w })),
     ];
+    this.staticWalls = this.walls;
+    this.dynamicWalls = [];     // desktop windows, replaced every frame
     this.pits = level.pits || [];
     this.spikes = level.spikes || [];
     this.ice = level.ice || [];
@@ -100,6 +120,12 @@ export class World {
   }
 
   allMagnets() { return this.fixedMagnets.concat(this.magnets); }
+
+  /** Walls that move (desktop windows): { x, z, w, d, a, vx, vz }. */
+  setDynamicWalls(list) {
+    this.dynamicWalls = list;
+    this.walls = this.staticWalls.concat(list);
+  }
 
   /** Can a player magnet go here? */
   canPlace(x, z, ignore = null) {
@@ -214,12 +240,13 @@ export class World {
       b.spinAngle = 0;
     }
 
-    // walls
+    // walls; a moving wall is a paddle
     for (const w of this.walls) {
       const c = circleVsRect(b.x, b.z, MARBLE_RADIUS, w);
       if (!c) continue;
       b.x += c.nx * c.depth; b.z += c.nz * c.depth;
-      const vn = b.vx * c.nx + b.vz * c.nz;
+      const wvx = w.vx || 0, wvz = w.vz || 0;
+      const vn = (b.vx - wvx) * c.nx + (b.vz - wvz) * c.nz;
       if (vn < 0) {
         b.vx -= (1 + WALL_RESTITUTION) * vn * c.nx;
         b.vz -= (1 + WALL_RESTITUTION) * vn * c.nz;

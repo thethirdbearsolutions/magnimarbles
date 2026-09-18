@@ -1,6 +1,7 @@
 import { World, WON, ALIVE, MAGNET_CHARGE } from './physics.js';
 import { LEVELS } from './levels.js';
 import { Editor, decodeLevel } from './editor.js';
+import { Desktop } from './desktop.js';
 
 const DT = 1 / 120;
 const STORE = 'magnimarbles.best.v1';
@@ -11,8 +12,9 @@ export class Game {
     this.levels = LEVELS;
     this.best = JSON.parse(localStorage.getItem(STORE) || '{}');
     this.el = {};
-    for (const id of ['levelNo', 'levelName', 'attempts', 'time', 'magnets', 'best', 'phase', 'challenges', 'run', 'reset', 'clear', 'prev', 'next', 'edit', 'toast', 'help'])
+    for (const id of ['levelNo', 'levelName', 'attempts', 'time', 'magnets', 'best', 'phase', 'challenges', 'run', 'reset', 'clear', 'prev', 'next', 'edit', 'desktop', 'toast', 'help'])
       this.el[id] = document.getElementById(id);
+    this.el.desktop.onclick = () => this.desktop.toggle();
     this.el.run.onclick = () => this.run();
     this.el.reset.onclick = () => this.reset();
     this.el.clear.onclick = () => this.clearMagnets();
@@ -28,6 +30,7 @@ export class Game {
     this.drag = null;
     this.accumulator = 0;
     this.editor = new Editor(this, view);
+    this.desktop = new Desktop(this, view);
     const hash = (location.hash || '').replace('#', '');
     const custom = decodeLevel(hash);
     if (custom) this.loadCustom(custom);
@@ -100,7 +103,7 @@ export class Game {
     this.result = { state, time: this.world.time, magnets: this.world.magnets.length, attempts: this.attempts };
     if (state === WON) {
       const met = this.challengesMet(this.result);
-      if (!this.custom) {
+      if (!this.custom && !this.desktop.active) {
         const key = this.level.name;
         const b = this.best[key];
         const rec = { time: this.result.time, magnets: this.result.magnets, attempts: this.result.attempts, met };
@@ -132,9 +135,10 @@ export class Game {
     switch (e.key) {
     case ' ': case 'Enter': e.preventDefault(); if (this.editor.active) break; if (this.phase === 'design') this.run(); else if (this.phase === 'done') this.reset(); break;
     case 'r': case 'R': this.reset(); break;
-    case 'e': case 'E': if (this.phase !== 'run') this.editor.toggle(); break;
-    case '[': this.loadLevel(this.levelIndex - 1); break;
-    case ']': this.loadLevel(this.levelIndex + 1); break;
+    case 'e': case 'E': if (this.phase !== 'run' && !this.desktop.active) this.editor.toggle(); break;
+    case 'd': case 'D': if (this.phase !== 'run' && !this.editor.active) this.desktop.toggle(); break;
+    case '[': if (!this.desktop.active) this.loadLevel(this.levelIndex - 1); break;
+    case ']': if (!this.desktop.active) this.loadLevel(this.levelIndex + 1); break;
     }
   }
 
@@ -194,6 +198,7 @@ export class Game {
   // ---- loop ----
 
   tick(dt) {
+    if (this.desktop.active) this.desktop.tick(this.world);
     if (this.phase === 'run') {
       this.accumulator += Math.min(dt, 0.1);
       while (this.accumulator >= DT) {
@@ -203,14 +208,19 @@ export class Game {
       }
       this.el.time.textContent = this.world.time.toFixed(1) + 's';
     }
-    this.view.render(this.world, this.phase, dt);
+    // the desktop's chase camera would put the DOM windows between the camera and the marble; stay on the stage view
+    this.view.render(this.world, this.desktop.active ? 'design' : this.phase, dt);
+    if (this.desktop.active) this.desktop.render();
   }
 
   // ---- hud ----
 
   updateHud() {
     const w = this.world, el = this.el;
-    el.levelNo.textContent = this.custom ? 'custom' : `${this.levelIndex + 1}/${this.levels.length}`;
+    el.levelNo.textContent = this.desktop.active ? 'toy' : this.custom ? 'custom' : `${this.levelIndex + 1}/${this.levels.length}`;
+    el.prev.disabled = el.next.disabled = el.edit.disabled = this.desktop.active;
+    el.desktop.textContent = this.desktop.active ? 'Leave desktop' : 'Desktop';
+    el.desktop.disabled = this.editor.active;
     el.levelName.textContent = this.level.name;
     el.attempts.textContent = String(this.attempts);
     el.time.textContent = (this.result ? this.result.time : w.time).toFixed(1) + 's';

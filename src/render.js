@@ -51,14 +51,15 @@ const RED = 0xff5a4e, BLUE = 0x4ea1ff;
 export class View {
   constructor(container) {
     this.container = container;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer.setClearColor(0x0b0d12, 1);
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.desktop = false;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0b0d12);
     this.scene.fog = new THREE.Fog(0x0b0d12, 40, 90);
 
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
@@ -106,10 +107,11 @@ export class View {
     const g = this.levelGroup = new THREE.Group();
     const [W, D] = world.level.size;
 
-    // floor
+    // floor; on the desktop the floor is DOM wallpaper and WebGL only draws shadows on it
     const floorTex = this.tex.floor;
     floorTex.repeat.set(W / 2, D / 2);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.95 }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D),
+      this.desktop ? new THREE.ShadowMaterial({ opacity: 0.35 }) : new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.95 }));
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     g.add(floor);
@@ -117,7 +119,7 @@ export class View {
     // walls
     const wallMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.8 });
     const edgeMat = new THREE.MeshStandardMaterial({ color: 0x4d3b2a, roughness: 0.9 });
-    for (const w of world.walls) {
+    for (const w of world.staticWalls) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w.w, w.h, w.d), w.edge ? edgeMat : wallMat);
       m.position.set(w.x, w.h / 2, w.z);
       m.castShadow = m.receiveShadow = true;
@@ -294,11 +296,24 @@ export class View {
     const dist = Math.max(W / (2 * Math.tan(fov / 2) * this.camera.aspect), D / (2 * Math.tan(fov / 2))) * 1.12;
     const shift = this.editShift || 0;
     const zoom = shift ? 1.3 : 1;   // editing: back off so the whole board clears the toolbar
-    this.designPos = new THREE.Vector3(0, dist * 0.92 * zoom, dist * 0.48 * zoom);
-    this.camera.position.copy(this.designPos).add(new THREE.Vector3(0, 0, -shift));
-    this.camPos.copy(this.camera.position);
-    this.camTarget.set(0, 0, -shift);
+    if (this.desktop) {
+      // a stage seen from the front, the way Looking Glass showed a desktop
+      this.designPos = new THREE.Vector3(0, dist * 0.55, dist * 0.95);
+      this.designTarget = new THREE.Vector3(0, 1.5, 0);
+    } else {
+      this.designPos = new THREE.Vector3(0, dist * 0.92 * zoom, dist * 0.48 * zoom - shift);
+      this.designTarget = new THREE.Vector3(0, 0, -shift);
+    }
+    this.camera.position.copy(this.designPos);
+    this.camPos.copy(this.designPos);
+    this.camTarget.copy(this.designTarget);
     this.camera.lookAt(this.camTarget);
+  }
+
+  setDesktop(on) {
+    this.desktop = on;
+    this.scene.fog = on ? null : new THREE.Fog(0x0b0d12, 40, 90);
+    this.renderer.setClearColor(0x0b0d12, on ? 0 : 1);
   }
 
   updateCamera(world, phase, dt) {
@@ -311,10 +326,8 @@ export class View {
       wantTarget = new THREE.Vector3(b.x, b.y, b.z);
       wantPos = wantTarget.clone().addScaledVector(this.chaseDir, -9).add(new THREE.Vector3(0, 7, 0));
     } else {
-      // while editing, slide the board down the screen so it clears the toolbar
-      const shift = this.editShift || 0;
-      wantPos = this.designPos.clone().add(new THREE.Vector3(0, 0, -shift));
-      wantTarget = new THREE.Vector3(0, 0, -shift);
+      wantPos = this.designPos;
+      wantTarget = this.designTarget;
     }
     this.camPos.lerp(wantPos, k);
     this.camTarget.lerp(wantTarget, k);
@@ -324,12 +337,16 @@ export class View {
 
   // ---- picking ----
 
-  pickFloor(clientX, clientY) {
+  pickFloor(clientX, clientY) { return this.pickAt(clientX, clientY, 0); }
+
+  /** Where the pointer ray crosses the horizontal plane at height y. */
+  pickAt(clientX, clientY, y) {
     const r = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
     const hit = new THREE.Vector3();
-    if (!this.raycaster.ray.intersectPlane(this.floorPlane, hit)) return null;
+    const plane = y === 0 ? this.floorPlane : new THREE.Plane(new THREE.Vector3(0, 1, 0), -y);
+    if (!this.raycaster.ray.intersectPlane(plane, hit)) return null;
     return { x: hit.x, z: hit.z };
   }
 

@@ -44,6 +44,26 @@
   #editor input { font: inherit; color: var(--ink); background: #10141d; border: 1px solid rgba(255,255,255,.18); border-radius: 4px; padding: 2px 4px; }
   #editor .hint { color: var(--dim); }
   #ed-status { color: var(--green); }
+
+  /* desktop toy mode */
+  #css3d { z-index: 0; }
+  #stage canvas { position: relative; z-index: 1; }
+  body.desktop #stage canvas { pointer-events: none; }
+  body.desktop { background: radial-gradient(ellipse at 50% 30%, #1d2a44 0%, #0b0d12 70%); }
+  .panel { z-index: 2; }
+  .wallpaper { background: linear-gradient(135deg, #1f4d8a 0%, #2c7bb0 45%, #6ac1d8 100%); box-shadow: inset 0 0 120px rgba(0,0,0,.5); cursor: crosshair; }
+  .lgwin { background: #eceae4; color: #1a1a1a; border-radius: 8px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.45); display: flex; flex-direction: column; font: 13px/1.3 ui-sans-serif, system-ui, sans-serif; backface-visibility: hidden; }
+  .lgwin .bar { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: linear-gradient(#5b6a86, #3c4a63); color: #fff; cursor: grab; user-select: none; }
+  .lgwin .bar .title { font-weight: 600; letter-spacing: .02em; }
+  .lgwin .bar .spacer { flex: 1; }
+  .lgwin .bar button { font: inherit; padding: 0 6px; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25); color: #fff; border-radius: 4px; cursor: pointer; }
+  .lgwin .body { flex: 1; min-height: 0; display: flex; }
+  .lgwin textarea { flex: 1; border: 0; padding: 10px; font: 13px/1.4 ui-monospace, Menlo, monospace; background: #fbfaf5; color: #222; resize: none; }
+  .lgwin iframe { flex: 1; border: 0; background: #000; }
+  .lgwin .clock { flex: 1; display: flex; align-items: center; justify-content: center; font: 600 40px ui-monospace, Menlo, monospace; color: #223; background: #fbfaf5; }
+  .lgwin .term { flex: 1; margin: 0; padding: 10px; background: #101418; color: #9fe39f; font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre; }
+  .lgwin.back { background: #d8d4c8; }
+  .lgwin.back textarea { background: #e9e5d8; }
 </style>
 </head>
 <body>
@@ -67,6 +87,7 @@
   <button id="prev">◀</button>
   <button id="next">▶</button>
   <button id="edit">Edit</button>
+  <button id="desktop">Desktop</button>
 </div>
 
 <div id="editor" class="panel">
