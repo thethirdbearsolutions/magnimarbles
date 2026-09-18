@@ -27,7 +27,12 @@ prints the fastest placements it found.
 - `src/levels.js` the courses
 - `src/render.js` Three.js scene, magnet glow, chase camera
 - `src/game.js` design phase, test phase, input, scoring, HUD
+- `src/editor.js` the level editor and the link format
 - `src/main.js` the loop
 
 Controls: click to place, click a magnet to flip it, drag to move, Ctrl-click
 to remove. Space runs, R resets, `[` and `]` change level.
+
+E opens the editor. Drag to draw walls, pits, and ice; click to drop spikes,
+fixed magnets, the start, and the goal; Ctrl-click erases. Copy link puts the
+whole level in the URL fragment, so a level is a link.

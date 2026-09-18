@@ -33,6 +33,17 @@
   #help b { color: var(--ink); }
   .plus { color: var(--red); } .minus { color: var(--blue); }
   #toast { top: 12px; left: 50%; transform: translateX(-50%); font-weight: bold; display: none; }
+  #editor { display: none; top: 12px; left: 300px; right: 12px; font-size: 13px; padding: 8px 12px; }
+  #editor .tools { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; align-items: center; }
+  #editor .fields { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  #editor .fields label { display: inline-block; margin: 0; }
+  #editor .hint { display: inline; margin-left: 8px; }
+  #editor .tools:last-of-type { margin-bottom: 0; }
+  #editor .tools button.on { background: #4a3c1b; border-color: #b08a3a; }
+  #editor .fields label { display: block; margin: 4px 0; color: var(--dim); }
+  #editor input { font: inherit; color: var(--ink); background: #10141d; border: 1px solid rgba(255,255,255,.18); border-radius: 4px; padding: 2px 4px; }
+  #editor .hint { color: var(--dim); }
+  #ed-status { color: var(--green); }
 </style>
 </head>
 <body>
@@ -55,6 +66,27 @@
   <button id="clear">Clear magnets</button>
   <button id="prev">◀</button>
   <button id="next">▶</button>
+  <button id="edit">Edit</button>
+</div>
+
+<div id="editor" class="panel">
+  <div class="tools">
+    <button data-tool="wall">wall</button><button data-tool="pit">pit</button><button data-tool="ice">ice</button>
+    <button data-tool="spike">spike</button><button data-tool="plus" class="plus">+ magnet</button><button data-tool="minus" class="minus">− magnet</button>
+    <button data-tool="start">start</button><button data-tool="goal">goal</button><button data-tool="erase">erase</button>
+  </div>
+  <div class="fields">
+    <label>name <input id="ed-name" size="14"></label>
+    <label>board <input id="ed-width" type="number" step="1" min="8" style="width:4em"> × <input id="ed-depth" type="number" step="1" min="6" style="width:4em"></label>
+    <label>budget <input id="ed-budget" type="number" min="0" style="width:4em"></label>
+    <label>start velocity <input id="ed-vx" type="number" step="0.5" style="width:4em"> , <input id="ed-vz" type="number" step="0.5" style="width:4em"></label>
+    <label>challenges: under <input id="ed-time" type="number" step="0.5" min="0" style="width:4em">s, exactly <input id="ed-magnets" type="number" min="0" style="width:3em"> magnets, within <input id="ed-attempts" type="number" min="1" style="width:3em"> attempts</label>
+  </div>
+  <div class="tools">
+    <button id="ed-test" class="primary">Test</button><button id="ed-share">Copy link</button><button id="ed-export">Copy JSON</button><button id="ed-new">New</button><button id="ed-close">Close</button>
+    <span id="ed-status"></span>
+  </div>
+  <div class="hint">Drag to draw walls, pits, and ice. Click to drop spikes, magnets, the start, and the goal. Ctrl-click erases. Copy link carries the whole level.</div>
 </div>
 
 <div id="help" class="panel">

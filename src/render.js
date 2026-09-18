@@ -270,16 +270,34 @@ export class View {
   }
   hideGhost() { if (this.ghost) this.ghost.visible = false; }
 
+  // the editor's drag rectangle
+  showRect(r, tool) {
+    if (!this.rectMesh) {
+      this.rectMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }));
+      this.rectMesh.rotation.x = -Math.PI / 2;
+      this.rectMesh.renderOrder = 5;
+      this.scene.add(this.rectMesh);
+    }
+    const color = tool === 'wall' ? 0xc9a070 : tool === 'pit' ? 0x000000 : 0x9fd8ff;
+    this.rectMesh.material.color.setHex(color);
+    this.rectMesh.visible = true;
+    this.rectMesh.position.set(r.x, 0.6, r.z);
+    this.rectMesh.scale.set(r.w, r.d, 1);
+  }
+  hideRect() { if (this.rectMesh) this.rectMesh.visible = false; }
+
   // ---- cameras ----
 
   snapDesignCamera() {
     const [W, D] = this.world.level.size;
     const fov = THREE.MathUtils.degToRad(this.camera.fov);
     const dist = Math.max(W / (2 * Math.tan(fov / 2) * this.camera.aspect), D / (2 * Math.tan(fov / 2))) * 1.12;
-    this.designPos = new THREE.Vector3(0, dist * 0.92, dist * 0.48);
-    this.camera.position.copy(this.designPos);
-    this.camPos.copy(this.designPos);
-    this.camTarget.set(0, 0, 0);
+    const shift = this.editShift || 0;
+    const zoom = shift ? 1.3 : 1;   // editing: back off so the whole board clears the toolbar
+    this.designPos = new THREE.Vector3(0, dist * 0.92 * zoom, dist * 0.48 * zoom);
+    this.camera.position.copy(this.designPos).add(new THREE.Vector3(0, 0, -shift));
+    this.camPos.copy(this.camera.position);
+    this.camTarget.set(0, 0, -shift);
     this.camera.lookAt(this.camTarget);
   }
 
@@ -293,8 +311,10 @@ export class View {
       wantTarget = new THREE.Vector3(b.x, b.y, b.z);
       wantPos = wantTarget.clone().addScaledVector(this.chaseDir, -9).add(new THREE.Vector3(0, 7, 0));
     } else {
-      wantPos = this.designPos;
-      wantTarget = new THREE.Vector3(0, 0, 0);
+      // while editing, slide the board down the screen so it clears the toolbar
+      const shift = this.editShift || 0;
+      wantPos = this.designPos.clone().add(new THREE.Vector3(0, 0, -shift));
+      wantTarget = new THREE.Vector3(0, 0, -shift);
     }
     this.camPos.lerp(wantPos, k);
     this.camTarget.lerp(wantTarget, k);
