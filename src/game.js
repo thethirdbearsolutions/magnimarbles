@@ -1,0 +1,204 @@
+import { World, WON, ALIVE, MAGNET_CHARGE } from './physics.js';
+import { LEVELS } from './levels.js';
+
+const DT = 1 / 120;
+const STORE = 'magnimarbles.best.v1';
+
+export class Game {
+  constructor(view) {
+    this.view = view;
+    this.levels = LEVELS;
+    this.best = JSON.parse(localStorage.getItem(STORE) || '{}');
+    this.el = {};
+    for (const id of ['levelNo', 'levelName', 'attempts', 'time', 'magnets', 'best', 'phase', 'challenges', 'run', 'reset', 'clear', 'prev', 'next', 'toast'])
+      this.el[id] = document.getElementById(id);
+    this.el.run.onclick = () => this.run();
+    this.el.reset.onclick = () => this.reset();
+    this.el.clear.onclick = () => this.clearMagnets();
+    this.el.prev.onclick = () => this.loadLevel(this.levelIndex - 1);
+    this.el.next.onclick = () => this.loadLevel(this.levelIndex + 1);
+    addEventListener('keydown', (e) => this.onKey(e));
+    const c = view.renderer.domElement;
+    c.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+    c.addEventListener('pointermove', (e) => this.onPointerMove(e));
+    c.addEventListener('pointerup', (e) => this.onPointerUp(e));
+    c.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.drag = null;
+    this.accumulator = 0;
+    const fromHash = parseInt((location.hash || '').replace('#', ''), 10);
+    this.loadLevel(Number.isFinite(fromHash) ? fromHash - 1 : 0);
+  }
+
+  // ---- levels & phases ----
+
+  loadLevel(i) {
+    i = ((i % this.levels.length) + this.levels.length) % this.levels.length;
+    this.levelIndex = i;
+    this.level = this.levels[i];
+    this.world = new World(this.level);
+    this.world.onBounce = (kind, speed) => this.onBounce(kind, speed);
+    this.world.reset();
+    this.phase = 'design';
+    this.attempts = 0;
+    this.result = null;
+    this.view.buildLevel(this.world);
+    location.hash = String(i + 1);
+    this.updateHud();
+  }
+
+  run() {
+    if (this.phase === 'run') return;
+    this.world.reset();
+    this.attempts++;
+    this.phase = 'run';
+    this.result = null;
+    this.accumulator = 0;
+    this.view.hideGhost();
+    this.updateHud();
+  }
+
+  reset() {
+    this.world.reset();
+    this.phase = 'design';
+    this.result = null;
+    this.updateHud();
+  }
+
+  clearMagnets() {
+    if (this.phase === 'run') return;
+    this.world.magnets = [];
+    this.view.syncMagnets(this.world);
+    this.updateHud();
+  }
+
+  finish(state) {
+    this.phase = 'done';
+    this.result = { state, time: this.world.time, magnets: this.world.magnets.length, attempts: this.attempts };
+    if (state === WON) {
+      const key = this.level.name;
+      const b = this.best[key];
+      const met = this.challengesMet(this.result);
+      const rec = { time: this.result.time, magnets: this.result.magnets, attempts: this.result.attempts, met };
+      if (!b || rec.time < b.time) this.best[key] = { ...rec, met: (b ? b.met.map((v, i) => v || met[i]) : met) };
+      else this.best[key].met = b.met.map((v, i) => v || met[i]);
+      localStorage.setItem(STORE, JSON.stringify(this.best));
+      this.toast(`Goal in ${this.result.time.toFixed(2)}s`, '#7ce07c');
+    } else {
+      this.toast(state, '#ff5a4e');
+    }
+    this.updateHud();
+  }
+
+  challengesMet(r) {
+    return (this.level.challenges || []).map(c => {
+      if (c.time !== undefined) return r.time <= c.time;
+      if (c.magnets !== undefined) return r.magnets === c.magnets;
+      if (c.attempts !== undefined) return r.attempts <= c.attempts;
+      return false;
+    });
+  }
+
+  // ---- input ----
+
+  onKey(e) {
+    if (e.repeat) return;
+    switch (e.key) {
+    case ' ': case 'Enter': e.preventDefault(); if (this.phase === 'design') this.run(); else if (this.phase === 'done') this.reset(); break;
+    case 'r': case 'R': this.reset(); break;
+    case '[': this.loadLevel(this.levelIndex - 1); break;
+    case ']': this.loadLevel(this.levelIndex + 1); break;
+    }
+  }
+
+  onPointerDown(e) {
+    if (this.phase === 'run') return;
+    if (this.phase === 'done') this.reset();
+    const p = this.view.pickFloor(e.clientX, e.clientY);
+    if (!p) return;
+    const m = this.world.magnetAt(p.x, p.z);
+    if (m) {
+      if (e.ctrlKey || e.button === 2) {
+        this.world.remove(m);
+        this.view.syncMagnets(this.world);
+      } else {
+        this.drag = { m, startX: p.x, startZ: p.z, moved: false, ox: m.x, oz: m.z };
+      }
+    } else if (e.button === 0 && !e.ctrlKey) {
+      const placed = this.world.place(p.x, p.z, MAGNET_CHARGE);
+      if (placed) { this.view.syncMagnets(this.world); this.drag = { m: placed, startX: p.x, startZ: p.z, moved: true, ox: placed.x, oz: placed.z }; }
+    }
+    this.updateHud();
+  }
+
+  onPointerMove(e) {
+    if (this.phase === 'run') return;
+    const p = this.view.pickFloor(e.clientX, e.clientY);
+    if (!p) { this.view.hideGhost(); return; }
+    if (this.drag) {
+      const m = this.drag.m;
+      if (Math.hypot(p.x - this.drag.startX, p.z - this.drag.startZ) > 0.15) this.drag.moved = true;
+      if (this.world.canPlace(p.x, p.z, m)) { m.x = p.x; m.z = p.z; }
+      this.view.syncMagnets(this.world);
+      this.view.hideGhost();
+      return;
+    }
+    if (this.world.magnetAt(p.x, p.z) || this.world.magnets.length >= this.world.budget) { this.view.hideGhost(); return; }
+    this.view.showGhost(p.x, p.z, this.world.canPlace(p.x, p.z), MAGNET_CHARGE);
+  }
+
+  onPointerUp(e) {
+    if (!this.drag) return;
+    const d = this.drag; this.drag = null;
+    if (!d.moved) {
+      d.m.q = -d.m.q;   // a click flips polarity
+      this.view.syncMagnets(this.world);
+    }
+    this.updateHud();
+  }
+
+  onBounce(kind, speed) { }
+
+  // ---- loop ----
+
+  tick(dt) {
+    if (this.phase === 'run') {
+      this.accumulator += Math.min(dt, 0.1);
+      while (this.accumulator >= DT) {
+        const s = this.world.step(DT);
+        this.accumulator -= DT;
+        if (s !== ALIVE) { this.finish(s); break; }
+      }
+      this.el.time.textContent = this.world.time.toFixed(1) + 's';
+    }
+    this.view.render(this.world, this.phase, dt);
+  }
+
+  // ---- hud ----
+
+  updateHud() {
+    const w = this.world, el = this.el;
+    el.levelNo.textContent = `${this.levelIndex + 1}/${this.levels.length}`;
+    el.levelName.textContent = this.level.name;
+    el.attempts.textContent = String(this.attempts);
+    el.time.textContent = (this.result ? this.result.time : w.time).toFixed(1) + 's';
+    el.magnets.textContent = `${w.magnets.length} / ${w.budget}`;
+    const b = this.best[this.level.name];
+    el.best.textContent = b ? `${b.time.toFixed(2)}s, ${b.magnets} magnet${b.magnets === 1 ? '' : 's'}` : '–';
+    el.phase.className = 'phase ' + (this.phase === 'run' ? 'run' : this.result ? (this.result.state === WON ? 'won' : 'lost') : '');
+    el.phase.textContent = this.phase === 'design' ? 'design: place your magnets' : this.phase === 'run' ? 'rolling' : (this.result.state === WON ? 'reached the goal' : this.result.state);
+    el.run.disabled = this.phase === 'run';
+    el.run.textContent = this.phase === 'done' ? 'Run again' : 'Run';
+    const met = this.result && this.result.state === WON ? this.challengesMet(this.result) : (b ? b.met : []);
+    el.challenges.innerHTML = (this.level.challenges || []).map((c, i) => {
+      const text = c.time !== undefined ? `under ${c.time}s` : c.magnets !== undefined ? `exactly ${c.magnets} magnet${c.magnets === 1 ? '' : 's'}` : `within ${c.attempts} attempts`;
+      return `<li class="${met[i] ? 'met' : ''}">${text}</li>`;
+    }).join('');
+  }
+
+  toast(text, color) {
+    const t = this.el.toast;
+    t.textContent = text; t.style.color = color; t.style.display = 'block';
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2200);
+  }
+}

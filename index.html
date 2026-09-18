@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Magnimarbles</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2713%27 fill=%27%23f2ead8%27/%3E%3Ccircle cx=%2712%27 cy=%2713%27 r=%275%27 fill=%27%23c8412f%27/%3E%3Ccircle cx=%2721%27 cy=%2720%27 r=%274%27 fill=%27%232f5fc8%27/%3E%3C/svg%3E">
+<style>
+  :root { --ink: #f4efe6; --dim: #b8b0a2; --red: #ff5a4e; --blue: #4ea1ff; --green: #7ce07c; }
+  html, body { margin: 0; height: 100%; background: #0b0d12; color: var(--ink); font: 15px/1.35 ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; }
+  .panel { position: fixed; background: rgba(10, 12, 18, .78); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 10px 12px; backdrop-filter: blur(6px); }
+  #hud { top: 12px; left: 12px; min-width: 250px; }
+  #hud h1 { font-size: 15px; margin: 0 0 2px; letter-spacing: .12em; text-transform: uppercase; }
+  #hud .level { color: var(--dim); margin-bottom: 8px; }
+  #hud .row { display: flex; justify-content: space-between; gap: 16px; }
+  #hud .phase { margin: 8px 0; font-weight: bold; }
+  #hud .phase.run { color: var(--green); }
+  #hud .phase.lost { color: var(--red); }
+  #hud .phase.won { color: var(--green); }
+  #challenges { margin: 8px 0 0; padding: 0; list-style: none; color: var(--dim); }
+  #challenges li.met { color: var(--green); }
+  #challenges li::before { content: "○ "; }
+  #challenges li.met::before { content: "● "; }
+  #buttons { bottom: 12px; left: 12px; display: flex; gap: 8px; }
+  button { font: inherit; color: var(--ink); background: #1b2030; border: 1px solid rgba(255,255,255,.18); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button:hover { background: #262d42; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: #2c4a2e; border-color: #4f8a52; }
+  button.primary:hover { background: #38603b; }
+  #help { bottom: 12px; right: 12px; color: var(--dim); max-width: 340px; font-size: 13px; }
+  #help b { color: var(--ink); }
+  .plus { color: var(--red); } .minus { color: var(--blue); }
+  #toast { top: 12px; left: 50%; transform: translateX(-50%); font-weight: bold; display: none; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="hud" class="panel">
+  <h1>Magnimarbles</h1>
+  <div class="level"><span id="levelNo"></span> <span id="levelName"></span></div>
+  <div class="row"><span>attempts</span><span id="attempts">0</span></div>
+  <div class="row"><span>time</span><span id="time">0.0s</span></div>
+  <div class="row"><span>magnets</span><span id="magnets">0 / 0</span></div>
+  <div class="row"><span>best</span><span id="best">–</span></div>
+  <div id="phase" class="phase">design</div>
+  <ul id="challenges"></ul>
+</div>
+
+<div id="buttons" class="panel">
+  <button id="run" class="primary">Run</button>
+  <button id="reset">Reset</button>
+  <button id="clear">Clear magnets</button>
+  <button id="prev">◀</button>
+  <button id="next">▶</button>
+</div>
+
+<div id="help" class="panel">
+  <b>Click</b> the board to place a magnet (<span class="plus">+ pushes</span>, <span class="minus">− pulls</span>).
+  <b>Click</b> a magnet to flip it. <b>Drag</b> to move it. <b>Ctrl-click</b> to remove.
+  <b>Space</b> runs, <b>R</b> resets, <b>[ ]</b> change level. Hands off once it rolls.
+</div>
+
+<div id="toast" class="panel"></div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
